@@ -20,15 +20,73 @@ fn main() {
     });
 
     let lines = read_lines_from_file(Path::new(&config.wordfile));
-
     println!("Read {} words from {}", lines.len(), config.wordfile);
+
+    let mut wordle = Wordle::new(lines);
 
     let init_guess = Guess {
         guess: config.init_guess.clone(),
         result: check_guess(config.init_guess, String::from(WORD)),
     };
-    println!("Initial guess: {}", init_guess.guess);
-    println!("Result: {}", init_guess.get_formatted_result());
+    println!("Initial guess: {}", &init_guess.guess);
+    println!("Result: {}", &init_guess.get_formatted_result());
+
+    let dict_size_before = wordle.dictionary.len();
+    wordle.add_guess(init_guess);
+
+    let dict_size_after = wordle.dictionary.len();
+    println!("Removed {} words from dict after first guess", dict_size_before - dict_size_after);
+    println!("There are {} words remaining after {} guess(es)", &wordle.dictionary.len(), &wordle.guesses.len());
+}
+
+struct Wordle {
+    guesses: Vec<Guess>,
+    dictionary: Vec<String>,
+    incorrect_letters: Vec<char>,
+    correct_letters: Vec<(char, u32)>,
+    incorrectly_placed_letters: Vec<char>,
+}
+
+impl Wordle {
+    fn new(dictionary: Vec<String>) -> Wordle {
+        Wordle {
+            guesses: vec!(),
+            dictionary: dictionary,
+            incorrect_letters: vec!(),
+            correct_letters: vec!(), // TODO: this probably needs to be a hash map? or use tuples?
+            incorrectly_placed_letters: vec!()
+        }
+    }
+
+
+    fn add_guess(&mut self, guess: Guess) {
+        self.guesses.push(guess);
+
+        let g: &Guess = self.guesses.last().unwrap();
+
+        for (i, c) in g.guess.chars().enumerate() {
+            if matches!(g.result[i], Correctness::Correct) {
+                // TODO:
+            } else if matches!(g.result[i], Correctness::IncorrectPlacement) {
+                // TODO:
+            } else {
+                self.incorrect_letters.push(c)
+            }
+        }
+
+        self.dictionary.retain(|word| !word_contains_given_letters(word, &self.incorrect_letters));
+    }
+
+}
+
+fn word_contains_given_letters(word: &String, letters: &Vec<char>) -> bool {
+    for c in letters {
+        if word.contains(*c) {
+            return true;
+        }
+    }
+
+    false
 }
 
 struct Config {
@@ -60,10 +118,10 @@ struct Guess {
 }
 
 impl Guess {
-    fn get_formatted_result(self) -> String {
+    fn get_formatted_result(&self) -> String {
         let mut result: String = String::new();
 
-        for r in self.result {
+        for r in &self.result {
             if matches!(r, Correctness::Correct) {
                 result.push(GREEN_SQUARE);
             } else if matches!(r, Correctness::IncorrectPlacement) {
@@ -86,6 +144,7 @@ fn read_lines_from_file(filename: &Path) -> Vec<String> {
         .collect()
 }
 
+#[derive(Copy, Clone)]
 enum Correctness {
     Correct,
     IncorrectPlacement,
@@ -159,5 +218,23 @@ mod tests {
         let expected_result = format!("{}{}{}{}{}", GREEN_SQUARE, WHITE_SQUARE, GREEN_SQUARE, YELLOW_SQUARE, WHITE_SQUARE);
 
         assert_eq!(guess.get_formatted_result(), expected_result);
+    }
+
+    #[test]
+    fn it_should_not_delete_the_word() {
+        let word = String::from("hello");
+        let letters = vec!['a'];
+
+        assert!(!word_contains_given_letters(&word, &letters));
+
+    }
+
+    #[test]
+    fn it_should_delete_the_word() {
+        let word = String::from("hello");
+        let letters = vec!['o'];
+
+        assert!(word_contains_given_letters(&word, &letters));
+
     }
 }
