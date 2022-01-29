@@ -6,7 +6,12 @@ use std::{
     process,
 };
 
+const GREEN_SQUARE: char = '🟩';
+const WHITE_SQUARE: char = '⬜';
+const YELLOW_SQUARE: char = '🟨';
+
 fn main() {
+    const WORD: &str = "adieu";
     let args: Vec<String> = env::args().collect();
 
     let config = Config::new(&args).unwrap_or_else(|err| {
@@ -16,7 +21,14 @@ fn main() {
 
     let lines = read_lines_from_file(Path::new(&config.wordfile));
 
-    println!("Read {} words from {}", lines.len(), config.wordfile)
+    println!("Read {} words from {}", lines.len(), config.wordfile);
+
+    let init_guess = Guess {
+        guess: config.init_guess.clone(),
+        result: check_guess(config.init_guess, String::from(WORD)),
+    };
+    println!("Initial guess: {}", init_guess.guess);
+    println!("Result: {}", init_guess.get_formatted_result());
 }
 
 struct Config {
@@ -42,6 +54,29 @@ impl Config {
     }
 }
 
+struct Guess {
+    guess: String,
+    result: Vec<Correctness>,
+}
+
+impl Guess {
+    fn get_formatted_result(self) -> String {
+        let mut result: String = String::new();
+
+        for r in self.result {
+            if matches!(r, Correctness::Correct) {
+                result.push(GREEN_SQUARE);
+            } else if matches!(r, Correctness::IncorrectPlacement) {
+                result.push(YELLOW_SQUARE);
+            } else {
+                result.push(WHITE_SQUARE);
+            }
+        };
+
+        result
+    }
+}
+
 fn read_lines_from_file(filename: &Path) -> Vec<String> {
     let file = File::open(&filename).unwrap_or_else(|_| panic!("No such file"));
 
@@ -57,7 +92,7 @@ enum Correctness {
     Incorrect,
 }
 
-fn check_guess(guess: &str, word: &str) -> Vec<Correctness> {
+fn check_guess(guess: String, word: String) -> Vec<Correctness> {
     let guess_chars: Vec<_> = guess.chars().collect();
     let word_chars: Vec<_> = word.chars().collect();
 
@@ -83,13 +118,8 @@ mod tests {
     use super::*;
 
     #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
-
-    #[test]
     fn it_should_return_all_correct() {
-        let result = check_guess("salty", "salty");
+        let result = check_guess(String::from("salty"), String::from("salty"));
         for r in result {
             assert!(matches!(r, Correctness::Correct))
         }
@@ -97,7 +127,7 @@ mod tests {
 
     #[test]
     fn it_should_return_all_incorrect() {
-        let result = check_guess("skirt", "lynch");
+        let result = check_guess(String::from("skirt"), String::from("lynch"));
         for r in result {
             assert!(matches!(r, Correctness::Incorrect))
         }
@@ -105,11 +135,29 @@ mod tests {
 
     #[test]
     fn it_should_return_correct_mixed_results() {
-        let result = check_guess("skirt", "shirt");
+        let result = check_guess(String::from("skirt"), String::from("shirt"));
         assert!(matches!(result[0], Correctness::Correct));
         assert!(matches!(result[1], Correctness::Incorrect));
         assert!(matches!(result[2], Correctness::Correct));
         assert!(matches!(result[3], Correctness::Correct));
         assert!(matches!(result[4], Correctness::Correct));
+    }
+
+    #[test]
+    fn it_should_render_a_correct_result_string() {
+        let guess = Guess {
+            guess: String::from("testing"),
+            result: vec![
+                Correctness::Correct,
+                Correctness::Incorrect,
+                Correctness::Correct,
+                Correctness::IncorrectPlacement,
+                Correctness::Incorrect,
+            ],
+        };
+
+        let expected_result = format!("{}{}{}{}{}", GREEN_SQUARE, WHITE_SQUARE, GREEN_SQUARE, YELLOW_SQUARE, WHITE_SQUARE);
+
+        assert_eq!(guess.get_formatted_result(), expected_result);
     }
 }
