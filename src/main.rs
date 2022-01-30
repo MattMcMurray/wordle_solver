@@ -4,7 +4,9 @@ use std::{
     io::{prelude::*, BufReader},
     path::Path,
     process,
+    collections::HashSet,
 };
+use rand::seq::SliceRandom;
 
 const GREEN_SQUARE: char = '🟩';
 const WHITE_SQUARE: char = '⬜';
@@ -45,7 +47,7 @@ fn main() {
     );
 
     while !&wordle.is_solved() && &wordle.dictionary.len() > &0 {
-        let next_word = wordle.dictionary.first().unwrap();
+        let next_word = choose_next_guess(&wordle.dictionary);
         let next_guess = Guess {
             guess: next_word.clone(),
             result: check_guess(&next_word, &config.target),
@@ -83,7 +85,7 @@ impl Wordle {
             guesses: vec![],
             dictionary: dictionary,
             incorrect_letters: vec![],
-            correct_letters: vec![], // TODO: this probably needs to be a hash map? or use tuples?
+            correct_letters: vec![],
             misplaced_letters: vec![],
         }
     }
@@ -151,6 +153,35 @@ fn filter_dictionary(
     }
 
     true
+}
+
+fn choose_next_guess(dict: &Vec<String>) -> &String {
+    let mut num_choices = 0;
+
+    loop {
+        let mut rng = rand::thread_rng();
+        let choice = dict.choose(&mut rng).unwrap();
+
+        num_choices = num_choices + 1;
+
+        if dict.len() < 10 || !has_double_letter(choice) || num_choices > 4 {
+            return choice;
+        }
+    }
+}
+
+fn has_double_letter(word: &String) -> bool {
+    let mut set = HashSet::new();
+
+    for c in word.chars() {
+        if set.contains(&c) {
+            return true;
+        } else {
+            set.insert(c);
+        }
+    };
+
+    return false;
 }
 
 struct Config {
@@ -343,7 +374,7 @@ mod tests {
     }
 
     #[test]
-    fn it_should_filter_the_word_if_it_does_not_have_correctly_placed_lettrr() {
+    fn it_should_filter_the_word_if_it_does_not_have_correctly_placed_letter() {
         let word = String::from("hello");
         let correct_letters = vec![('a', 1)];
 
@@ -356,7 +387,7 @@ mod tests {
     }
 
     #[test]
-    fn it_should_not_filter_the_word_if_it_does_not_have_correctly_placed_lettrr() {
+    fn it_should_not_filter_the_word_if_it_does_not_have_correctly_placed_letter() {
         let word = String::from("hello");
         let correct_letters = vec![('e', 1)];
 
@@ -366,5 +397,15 @@ mod tests {
             &vec!(),
             &correct_letters
         ));
+    }
+
+    #[test]
+    fn it_should_return_true_if_the_word_contains_double_letters() {
+        assert!(has_double_letter(&String::from("hello")))
+    }
+
+    #[test]
+    fn it_should_return_false_if_the_word_does_not_contain_double_letters() {
+        assert!(!has_double_letter(&String::from("friend")))
     }
 }
