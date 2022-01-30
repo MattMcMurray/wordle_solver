@@ -11,7 +11,6 @@ const WHITE_SQUARE: char = '⬜';
 const YELLOW_SQUARE: char = '🟨';
 
 fn main() {
-    const WORD: &str = "angel";
     let args: Vec<String> = env::args().collect();
 
     let config = Config::new(&args).unwrap_or_else(|err| {
@@ -26,7 +25,7 @@ fn main() {
 
     let init_guess = Guess {
         guess: config.init_guess.clone(),
-        result: check_guess(config.init_guess, String::from(WORD)),
+        result: check_guess(&config.init_guess, &config.target),
     };
     println!("Initial guess: {}", &init_guess.guess);
     println!("Result: {}", &init_guess.get_formatted_result());
@@ -49,7 +48,7 @@ fn main() {
         let next_word = wordle.dictionary.first().unwrap();
         let next_guess = Guess {
             guess: next_word.clone(),
-            result: check_guess(next_word.clone(), String::from(WORD)),
+            result: check_guess(&next_word, &config.target),
         };
 
         println!("Next guess: {}", &next_guess.guess);
@@ -110,7 +109,7 @@ impl Wordle {
                 &self.incorrect_letters,
                 &self.misplaced_letters,
                 &self.correct_letters,
-            )
+            ) && word != &g.guess
         });
     }
 
@@ -157,6 +156,7 @@ fn filter_dictionary(
 struct Config {
     wordfile: String,
     init_guess: String,
+    target: String,
 }
 
 impl Config {
@@ -169,10 +169,12 @@ impl Config {
 
         let wordfile = args[1].clone();
         let init_guess = args[2].clone();
+        let target = args[3].clone();
 
         Ok(Config {
             wordfile,
             init_guess,
+            target,
         })
     }
 }
@@ -216,7 +218,7 @@ enum Correctness {
     Incorrect,
 }
 
-fn check_guess(guess: String, word: String) -> Vec<Correctness> {
+fn check_guess(guess: &String, word: &String) -> Vec<Correctness> {
     let guess_chars: Vec<_> = guess.chars().collect();
     let word_chars: Vec<_> = word.chars().collect();
 
@@ -243,7 +245,7 @@ mod tests {
 
     #[test]
     fn it_should_return_all_correct() {
-        let result = check_guess(String::from("salty"), String::from("salty"));
+        let result = check_guess(&String::from("salty"), &String::from("salty"));
         for r in result {
             assert!(matches!(r, Correctness::Correct))
         }
@@ -251,7 +253,7 @@ mod tests {
 
     #[test]
     fn it_should_return_all_incorrect() {
-        let result = check_guess(String::from("skirt"), String::from("lynch"));
+        let result = check_guess(&String::from("skirt"), &String::from("lynch"));
         for r in result {
             assert!(matches!(r, Correctness::Incorrect))
         }
@@ -259,7 +261,7 @@ mod tests {
 
     #[test]
     fn it_should_return_correct_mixed_results() {
-        let result = check_guess(String::from("skirt"), String::from("shirt"));
+        let result = check_guess(&String::from("skirt"), &String::from("shirt"));
         assert!(matches!(result[0], Correctness::Correct));
         assert!(matches!(result[1], Correctness::Incorrect));
         assert!(matches!(result[2], Correctness::Correct));
@@ -363,6 +365,6 @@ mod tests {
             &vec!(),
             &vec!(),
             &correct_letters
-        ))
+        ));
     }
 }
