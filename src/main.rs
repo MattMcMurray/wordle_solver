@@ -11,7 +11,7 @@ const WHITE_SQUARE: char = '⬜';
 const YELLOW_SQUARE: char = '🟨';
 
 fn main() {
-    const WORD: &str = "adieu";
+    const WORD: &str = "angel";
     let args: Vec<String> = env::args().collect();
 
     let config = Config::new(&args).unwrap_or_else(|err| {
@@ -35,8 +35,39 @@ fn main() {
     wordle.add_guess(init_guess);
 
     let dict_size_after = wordle.dictionary.len();
-    println!("Removed {} words from dict after first guess", dict_size_before - dict_size_after);
-    println!("There are {} words remaining after {} guess(es)", &wordle.dictionary.len(), &wordle.guesses.len());
+    println!(
+        "Removed {} words from dict after first guess",
+        dict_size_before - dict_size_after
+    );
+    println!(
+        "There are {} words remaining after {} guess(es)",
+        &wordle.dictionary.len(),
+        &wordle.guesses.len()
+    );
+
+    while !&wordle.is_solved() && &wordle.dictionary.len() > &0 {
+        let next_word = wordle.dictionary.first().unwrap();
+        let next_guess = Guess {
+            guess: next_word.clone(),
+            result: check_guess(next_word.clone(), String::from(WORD)),
+        };
+
+        println!("Next guess: {}", &next_guess.guess);
+        println!("Result: {}", &next_guess.get_formatted_result());
+
+        let dict_size_before = wordle.dictionary.len();
+        wordle.add_guess(next_guess);
+        let dict_size_after = wordle.dictionary.len();
+        println!(
+            "Removed {} words from dict after first guess",
+            dict_size_before - dict_size_after
+        );
+        println!(
+            "There are {} words remaining after {} guess(es)",
+            &wordle.dictionary.len(),
+            &wordle.guesses.len()
+        );
+    }
 }
 
 struct Wordle {
@@ -44,20 +75,19 @@ struct Wordle {
     dictionary: Vec<String>,
     incorrect_letters: Vec<char>,
     correct_letters: Vec<(char, u32)>,
-    incorrectly_placed_letters: Vec<char>,
+    misplaced_letters: Vec<char>,
 }
 
 impl Wordle {
     fn new(dictionary: Vec<String>) -> Wordle {
         Wordle {
-            guesses: vec!(),
+            guesses: vec![],
             dictionary: dictionary,
-            incorrect_letters: vec!(),
-            correct_letters: vec!(), // TODO: this probably needs to be a hash map? or use tuples?
-            incorrectly_placed_letters: vec!()
+            incorrect_letters: vec![],
+            correct_letters: vec![], // TODO: this probably needs to be a hash map? or use tuples?
+            misplaced_letters: vec![],
         }
     }
-
 
     fn add_guess(&mut self, guess: Guess) {
         self.guesses.push(guess);
@@ -66,27 +96,62 @@ impl Wordle {
 
         for (i, c) in g.guess.chars().enumerate() {
             if matches!(g.result[i], Correctness::Correct) {
-                // TODO:
+                self.correct_letters.push((c, i.try_into().unwrap()));
             } else if matches!(g.result[i], Correctness::IncorrectPlacement) {
-                // TODO:
+                self.misplaced_letters.push(c);
             } else {
                 self.incorrect_letters.push(c)
             }
         }
 
-        self.dictionary.retain(|word| !word_contains_given_letters(word, &self.incorrect_letters));
+        self.dictionary.retain(|word| {
+            filter_dictionary(
+                word,
+                &self.incorrect_letters,
+                &self.misplaced_letters,
+                &self.correct_letters,
+            )
+        });
     }
 
+    fn is_solved(&self) -> bool {
+        let last_guess = self.guesses.last().unwrap();
+
+        for r in &last_guess.result {
+            if !matches!(r, Correctness::Correct) {
+                return false;
+            }
+        }
+
+        true
+    }
 }
 
-fn word_contains_given_letters(word: &String, letters: &Vec<char>) -> bool {
-    for c in letters {
+fn filter_dictionary(
+    word: &String,
+    incorrect_letters: &Vec<char>,
+    misplaced_letters: &Vec<char>,
+    correct_letters: &Vec<(char, u32)>,
+) -> bool {
+    for c in incorrect_letters {
         if word.contains(*c) {
-            return true;
+            return false;
         }
     }
 
-    false
+    for c in misplaced_letters {
+        if !word.contains(*c) {
+            return false;
+        }
+    }
+
+    for (c, i) in correct_letters {
+        if word.chars().nth(*i as usize).unwrap() != *c {
+            return false;
+        }
+    }
+
+    true
 }
 
 struct Config {
@@ -129,7 +194,7 @@ impl Guess {
             } else {
                 result.push(WHITE_SQUARE);
             }
-        };
+        }
 
         result
     }
@@ -215,26 +280,89 @@ mod tests {
             ],
         };
 
-        let expected_result = format!("{}{}{}{}{}", GREEN_SQUARE, WHITE_SQUARE, GREEN_SQUARE, YELLOW_SQUARE, WHITE_SQUARE);
+        let expected_result = format!(
+            "{}{}{}{}{}",
+            GREEN_SQUARE, WHITE_SQUARE, GREEN_SQUARE, YELLOW_SQUARE, WHITE_SQUARE
+        );
 
         assert_eq!(guess.get_formatted_result(), expected_result);
     }
 
     #[test]
-    fn it_should_not_delete_the_word() {
+    fn it_should_not_filter_the_word_if_no_incorrect_letters() {
         let word = String::from("hello");
-        let letters = vec!['a'];
+        let incorrect_letters = vec!['a'];
 
-        assert!(!word_contains_given_letters(&word, &letters));
-
+        assert!(filter_dictionary(
+            &word,
+            &incorrect_letters,
+            &vec!(),
+            &vec!()
+        ));
     }
 
     #[test]
-    fn it_should_delete_the_word() {
+    fn it_should_filter_the_word_if_it_contains_incorrect_letters() {
         let word = String::from("hello");
-        let letters = vec!['o'];
+        let incorrect_letters = vec!['o'];
 
-        assert!(word_contains_given_letters(&word, &letters));
+        assert!(!filter_dictionary(
+            &word,
+            &incorrect_letters,
+            &vec!(),
+            &vec!()
+        ));
+    }
 
+    #[test]
+    fn it_should_filter_the_word_if_it_does_not_contain_the_misplaced_letter() {
+        let word = String::from("hello");
+        let misplaced_letters = vec!['a'];
+
+        assert!(!filter_dictionary(
+            &word,
+            &vec!(),
+            &misplaced_letters,
+            &vec!()
+        ))
+    }
+
+    #[test]
+    fn it_should_not_filter_the_word_if_it_does_not_contain_the_misplaced_letter() {
+        let word = String::from("hello");
+        let misplaced_letters = vec!['l'];
+
+        assert!(filter_dictionary(
+            &word,
+            &vec!(),
+            &misplaced_letters,
+            &vec!()
+        ))
+    }
+
+    #[test]
+    fn it_should_filter_the_word_if_it_does_not_have_correctly_placed_lettrr() {
+        let word = String::from("hello");
+        let correct_letters = vec![('a', 1)];
+
+        assert!(!filter_dictionary(
+            &word,
+            &vec!(),
+            &vec!(),
+            &correct_letters
+        ))
+    }
+
+    #[test]
+    fn it_should_not_filter_the_word_if_it_does_not_have_correctly_placed_lettrr() {
+        let word = String::from("hello");
+        let correct_letters = vec![('e', 1)];
+
+        assert!(filter_dictionary(
+            &word,
+            &vec!(),
+            &vec!(),
+            &correct_letters
+        ))
     }
 }
