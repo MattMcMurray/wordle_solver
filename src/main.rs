@@ -42,7 +42,14 @@ fn main() {
     });
 
     let config = Config::new(wordlist_path, first_guess, target);
-    let lines = read_lines_from_file(Path::new(&config.wordfile));
+    let lines = match read_lines_from_file(Path::new(&config.wordfile)) {
+        Err(why) => {
+            println!("{}", why);
+            process::exit(1);
+        },
+        Ok(value) => value
+    };
+
     println!("Read {} words from {}", lines.len(), config.wordfile);
 
     let mut wordle = Wordle::new(lines);
@@ -121,11 +128,14 @@ impl Config {
     }
 }
 
-fn read_lines_from_file(filename: &Path) -> Vec<String> {
-    let file = File::open(&filename).unwrap_or_else(|_| panic!("No such file"));
+fn read_lines_from_file(filename: &Path) -> Result<Vec<String>, String> {
+    let file = File::open(&filename);
+    if !file.is_ok() {
+        return Err(format!("Could not open file {:?}", &filename));
+    }
 
-    let buf = BufReader::new(file);
-    buf.lines()
+    let buf = BufReader::new(file.unwrap());
+    Ok(buf.lines()
         .map(|l| l.expect("Could not parse line"))
-        .collect()
+        .collect())
 }
