@@ -1,9 +1,10 @@
 use rand::seq::SliceRandom;
-use std::collections::HashSet;
 
 pub const GREEN_SQUARE: char = '🟩';
 pub const WHITE_SQUARE: char = '⬜';
 pub const YELLOW_SQUARE: char = '🟨';
+
+mod lib;
 
 pub struct Wordle {
   pub guesses: Vec<Guess>,
@@ -40,7 +41,7 @@ impl Wordle {
     }
 
     self.dictionary.retain(|word| {
-      filter_dictionary(
+      lib::filter_dictionary(
         word,
         &self.incorrect_letters,
         &self.misplaced_letters,
@@ -92,33 +93,6 @@ pub enum Correctness {
   Incorrect,
 }
 
-fn filter_dictionary(
-  word: &String,
-  incorrect_letters: &Vec<char>,
-  misplaced_letters: &Vec<char>,
-  correct_letters: &Vec<(char, u32)>,
-) -> bool {
-  for c in incorrect_letters {
-    if word.contains(*c) {
-      return false;
-    }
-  }
-
-  for c in misplaced_letters {
-    if !word.contains(*c) {
-      return false;
-    }
-  }
-
-  for (c, i) in correct_letters {
-    if word.chars().nth(*i as usize).unwrap() != *c {
-      return false;
-    }
-  }
-
-  true
-}
-
 // TODO: encapsulate this and make it private (?)
 pub fn check_guess(guess: &String, word: &String) -> Vec<Correctness> {
   let guess_chars: Vec<_> = guess.chars().collect();
@@ -141,20 +115,6 @@ pub fn check_guess(guess: &String, word: &String) -> Vec<Correctness> {
   correctness
 }
 
-fn has_double_letter(word: &String) -> bool {
-  let mut set = HashSet::new();
-
-  for c in word.chars() {
-    if set.contains(&c) {
-      return true;
-    } else {
-      set.insert(c);
-    }
-  }
-
-  return false;
-}
-
 pub fn choose_next_guess(dict: &Vec<String>) -> &String {
   let mut num_choices = 0;
 
@@ -164,7 +124,7 @@ pub fn choose_next_guess(dict: &Vec<String>) -> &String {
 
     num_choices = num_choices + 1;
 
-    if dict.len() < 10 || !has_double_letter(choice) || num_choices > 4 {
+    if dict.len() < 10 || !lib::has_double_letter(choice) || num_choices > 4 {
       return choice;
     }
   }
@@ -219,88 +179,5 @@ mod tests {
     );
 
     assert_eq!(guess.get_formatted_result(), expected_result);
-  }
-
-  #[test]
-  fn it_should_not_filter_the_word_if_no_incorrect_letters() {
-    let word = String::from("hello");
-    let incorrect_letters = vec!['a'];
-
-    assert!(filter_dictionary(
-      &word,
-      &incorrect_letters,
-      &vec!(),
-      &vec!()
-    ));
-  }
-
-  #[test]
-  fn it_should_filter_the_word_if_it_contains_incorrect_letters() {
-    let word = String::from("hello");
-    let incorrect_letters = vec!['o'];
-
-    assert!(!filter_dictionary(
-      &word,
-      &incorrect_letters,
-      &vec!(),
-      &vec!()
-    ));
-  }
-
-  #[test]
-  fn it_should_filter_the_word_if_it_does_not_contain_the_misplaced_letter() {
-    let word = String::from("hello");
-    let misplaced_letters = vec!['a'];
-
-    assert!(!filter_dictionary(
-      &word,
-      &vec!(),
-      &misplaced_letters,
-      &vec!()
-    ))
-  }
-
-  #[test]
-  fn it_should_not_filter_the_word_if_it_does_not_contain_the_misplaced_letter() {
-    let word = String::from("hello");
-    let misplaced_letters = vec!['l'];
-
-    assert!(filter_dictionary(
-      &word,
-      &vec!(),
-      &misplaced_letters,
-      &vec!()
-    ))
-  }
-
-  #[test]
-  fn it_should_filter_the_word_if_it_does_not_have_correctly_placed_letter() {
-    let word = String::from("hello");
-    let correct_letters = vec![('a', 1)];
-
-    assert!(!filter_dictionary(
-      &word,
-      &vec!(),
-      &vec!(),
-      &correct_letters
-    ))
-  }
-
-  #[test]
-  fn it_should_not_filter_the_word_if_it_does_not_have_correctly_placed_letter() {
-    let word = String::from("hello");
-    let correct_letters = vec![('e', 1)];
-
-    assert!(filter_dictionary(&word, &vec!(), &vec!(), &correct_letters));
-  }
-
-  #[test]
-  fn it_should_return_true_if_the_word_contains_double_letters() {
-    assert!(has_double_letter(&String::from("hello")))
-  }
-
-  #[test]
-  fn it_should_return_false_if_the_word_does_not_contain_double_letters() {
-    assert!(!has_double_letter(&String::from("friend")))
   }
 }
