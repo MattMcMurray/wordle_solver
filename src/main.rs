@@ -1,24 +1,47 @@
 use std::{
-    env,
     fs::File,
     io::{prelude::*, BufReader},
     path::Path,
     process,
 };
 
+use clap::Parser;
+
 mod wordle;
 
 use wordle::Guess;
 use wordle::Wordle;
 
-fn main() {
-    let args: Vec<String> = env::args().collect();
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    /// The relative path to the dictionary/wordlist
+    wordlist: Option<String>,
 
-    let config = Config::new(&args).unwrap_or_else(|err| {
-        println!("Problem parsing arguments: {}", err);
+    /// The starting word
+    first_guess: Option<String>,
+
+    /// The solution
+    target: Option<String>,
+}
+
+fn main() {
+    let args = Args::parse();
+
+    let wordlist_path = args.wordlist.unwrap_or_else(|| {
+        println!("Missing `wordlist` arg");
+        process::exit(1);
+    });
+    let first_guess = args.first_guess.unwrap_or_else(|| {
+        println!("Missing `first_guess` arg");
+        process::exit(1);
+    });
+    let target = args.target.unwrap_or_else(|| {
+        println!("Missing `target` arg");
         process::exit(1);
     });
 
+    let config = Config::new(wordlist_path, first_guess, target);
     let lines = read_lines_from_file(Path::new(&config.wordfile));
     println!("Read {} words from {}", lines.len(), config.wordfile);
 
@@ -45,7 +68,7 @@ fn main() {
         &wordle.guesses.len()
     );
 
-    while !&wordle.is_solved() && &wordle.dictionary.len() > &0 {
+    while &wordle.dictionary.len() > &0 {
         let next_word = wordle::choose_next_guess(&wordle.dictionary);
         let next_guess = Guess {
             guess: next_word.clone(),
@@ -57,16 +80,28 @@ fn main() {
 
         let dict_size_before = wordle.dictionary.len();
         wordle.add_guess(next_guess);
+
+        if wordle.is_solved() {
+            break
+        }
+
         let dict_size_after = wordle.dictionary.len();
         println!(
-            "Removed {} words from dict after first guess",
-            dict_size_before - dict_size_after
+            "Removed {} words from dict after guess: {}",
+            dict_size_before - dict_size_after,
+            &wordle.guesses.len(),
         );
         println!(
             "There are {} words remaining after {} guess(es)",
             &wordle.dictionary.len(),
             &wordle.guesses.len()
         );
+        println!();
+    }
+
+    if wordle.is_solved() {
+        println!("The correct word is {:?}.", &wordle.guesses.last().unwrap().guess);
+        println!("It took {:?} guesses to find it.", &wordle.guesses.len());
     }
 }
 
@@ -77,22 +112,12 @@ struct Config {
 }
 
 impl Config {
-    fn new(args: &[String]) -> Result<Config, &str> {
-        const NUM_ARGS: usize = 3;
-
-        if args.len() < NUM_ARGS {
-            return Err("not enough arguments");
-        }
-
-        let wordfile = args[1].clone();
-        let init_guess = args[2].clone();
-        let target = args[3].clone();
-
-        Ok(Config {
+    fn new(wordfile: String, init_guess: String, target: String) -> Config {
+        Config {
             wordfile,
             init_guess,
             target,
-        })
+        }
     }
 }
 
